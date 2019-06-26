@@ -55,8 +55,15 @@ const datas = require('./data.js');
             }, text);
         })('Quantum Computer.pptx');
 
-    myresize(browser._connection, windowId,datas.display.width,datas.display.height)
-    {   /* PowerPointスライドショー表示処理 */
+    myresize(browser._connection, windowId, datas.display.width, datas.display.height)
+
+
+    const frame = await (
+        /**
+         * PowerPointスライドショー表示処理
+         * @returns {puppeteer.Frame}
+         */
+        async () => {
         await page.goto(ppURL);
         await page.waitForSelector('iframe[name="wac_frame"]');
         const frame = await page.frames().find(f => f.name() === 'wac_frame');
@@ -66,6 +73,19 @@ const datas = require('./data.js');
         await frame.waitFor(2000);
         await frame.waitForSelector(`button[data-automation-id="PlayFromBeginning"]`);
         await frame.click(`button[data-automation-id="PlayFromBeginning"]`);
+        return frame;
+    })();
+
+    {   /* スライド */
+        await frame.evaluate(()=>{
+            document.querySelector('iframe#SlideShowHostFrame').setAttribute('name','SlideShowHostFrame');
+        });
+        const Slide = (await frame.childFrames().find(f => f.name() === 'SlideShowHostFrame')).childFrames()[0];
+        await Slide.waitForSelector('#browserLayerViewId');
+        for (var cnt = 0; cnt < 20; cnt++) {
+            await Slide.click('#browserLayerViewId').catch(()=>{});
+            await Slide.waitFor(1000);
+        }
     }
     await page.waitFor(1000000);
 
