@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <style>
+      html{
+        height: 90vh;
+        width: 100vw;
+      }
+      body{
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: flex-end;
+        margin: 0px 0px 0px 0px;
+        padding: 0px 0px 0px 0px;
+      }
+      input{
+        width: 50vw;
+        height: 20vh;
+      }
+    </style>
+    <title>Controller</title>
+</head>
+<body>
+    <input type="button" value="前へ" id="prev">
+    <input type="button" value="次へ" id="next">
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      var socket = io();
+      document.querySelector('input#prev').addEventListener('click',()=>{
+        socket.emit('message','prev');
+      })
+      document.querySelector('input#next').addEventListener('click',()=>{
+        socket.emit('message','next');
+      })
+    </script>
+</body>
+</html>

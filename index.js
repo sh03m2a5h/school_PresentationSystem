@@ -1,5 +1,29 @@
 const puppeteer = require('puppeteer');
 const datas = require('./data.js');
+const EventEmitter = require('events').EventEmitter;
+
+var app = require('express')();
+var http = require('http').createServer(app);
+var io = require('socket.io')(http);
+
+const event = new EventEmitter;
+event.setMaxListeners(10);
+
+app.get('/', function (req, res) {
+    res.sendFile(__dirname + '/index.html');
+});
+
+io.on('connection', function (socket) {
+    console.log('a user connected');
+    socket.on('message', (msg) => {
+        console.log(msg);
+        event.emit('control', msg);
+    });
+});
+
+http.listen(3000, function () {
+    console.log('listening on *:3000');
+});
 
 (async () => {
     const browser = await puppeteer.launch({ headless: false, args: ['--disable-infobar'], timeout: 15000 });
@@ -64,30 +88,37 @@ const datas = require('./data.js');
          * @returns {puppeteer.Frame}
          */
         async () => {
-        await page.goto(ppURL);
-        await page.waitForSelector('iframe[name="wac_frame"]');
-        const frame = await page.frames().find(f => f.name() === 'wac_frame');
-        await frame.waitFor(5000);
-        await frame.waitForSelector(`button[data-automation-id*="View"]`);
-        await frame.click(`button[data-automation-id="View"]`);
-        await frame.waitFor(2000);
-        await frame.waitForSelector(`button[data-automation-id="PlayFromBeginning"]`);
-        await frame.click(`button[data-automation-id="PlayFromBeginning"]`);
-        return frame;
-    })();
+            await page.goto(ppURL);
+            await page.waitForSelector('iframe[name="wac_frame"]');
+            const frame = await page.frames().find(f => f.name() === 'wac_frame');
+            await frame.waitFor(5000);
+            await frame.waitForSelector(`button[data-automation-id*="View"]`);
+            await frame.click(`button[data-automation-id="View"]`);
+            await frame.waitFor(2000);
+            await frame.waitForSelector(`button[data-automation-id="PlayFromBeginning"]`);
+            await frame.click(`button[data-automation-id="PlayFromBeginning"]`);
+            return frame;
+        })();
 
     {   /* スライド */
-        await frame.evaluate(()=>{
-            document.querySelector('iframe#SlideShowHostFrame').setAttribute('name','SlideShowHostFrame');
+        await frame.evaluate(() => {
+            document.querySelector('iframe#SlideShowHostFrame').setAttribute('name', 'SlideShowHostFrame');
         });
         const Slide = (await frame.childFrames().find(f => f.name() === 'SlideShowHostFrame')).childFrames()[0];
         await Slide.waitForSelector('#browserLayerViewId');
-        for (var cnt = 0; cnt < 20; cnt++) {
-            await Slide.click('#browserLayerViewId').catch(()=>{});
-            await Slide.waitFor(1000);
-        }
+        const onControl = async (msg) => {
+            switch (msg) {
+                case 'next':
+                    await frame.evaluate(() => { document.querySelector('#buttonNextSlide').click() }).catch(async ()=>{
+                        event.removeListener('control',onControl);
+                        await browser.close();
+                    });
+                    break;
+                case 'prev':
+                    await frame.evaluate(() => { document.querySelector('#buttonPrevSlide').click() });
+                    break;
+            }
+        };
+        event.addListener('control',onControl);
     }
-    await page.waitFor(1000000);
-
-    await browser.close();
 })();
