@@ -14,6 +14,7 @@
         height: 100%;
         display: flex;
         align-items: flex-end;
+        flex-direction:column;
         margin: 0px 0px 0px 0px;
         padding: 0px 0px 0px 0px;
       }
@@ -21,12 +22,26 @@
         width: 50vw;
         height: 20vh;
       }
+      textarea#notes{
+        width: 100vw;
+        height: 50vh;
+        background-color: #fff;
+        padding: 5px;
+        box-sizing: border-box;
+      }
+      #buttons{
+        display: flex;
+        flex-direction: row;
+      }
     </style>
     <title>Controller</title>
 </head>
 <body>
-    <input type="button" value="前へ" id="prev">
-    <input type="button" value="次へ" id="next">
+    <textarea id="notes" readonly disabled></textarea>
+    <div id="buttons">
+      <input type="button" value="前へ" id="prev">
+      <input type="button" value="次へ" id="next">
+    </div>
     <script src="/socket.io/socket.io.js"></script>
     <script>
       var socket = io();
@@ -35,6 +50,10 @@
       })
       document.querySelector('input#next').addEventListener('click',()=>{
         socket.emit('message','next');
+      })
+
+      socket.on('note',(data)=>{
+        document.querySelector('#notes').value = data;
       })
     </script>
 </body>

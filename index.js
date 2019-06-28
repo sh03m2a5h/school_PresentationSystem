@@ -1,5 +1,6 @@
 const puppeteer = require('puppeteer');
 const datas = require('./data.js');
+const execSync = require('child_process').execSync;
 const EventEmitter = require('events').EventEmitter;
 
 var app = require('express')();
@@ -26,7 +27,7 @@ http.listen(3000, function () {
 });
 
 (async () => {
-    const browser = await puppeteer.launch({ headless: false, args: ['--disable-infobar'], timeout: 15000 });
+    const browser = await puppeteer.launch({ headless: false, args: ['--start-fullscreen', '--disable-infobar'], timeout: 15000 });
     const page = await browser.newPage(); const { targetInfos: [{ targetId }] } = await browser._connection.send(
         'Target.getTargets'
     )
@@ -49,6 +50,15 @@ http.listen(3000, function () {
     }
     await page.setViewport({ width: 1280, height: 720 });
     await page.goto('https://office.com');
+
+    {
+        const disps = execSync('python close_imbotbar.py').toString();
+        const json = JSON.parse(disps);
+        datas.display.width = json.width;
+        datas.display.height = json.height;
+        console.log(datas.display);
+    }
+
 
     {   /* ログイン処理 */
         await page.waitForSelector('#hero-banner-sign-in-to-office-365-link');
@@ -109,8 +119,8 @@ http.listen(3000, function () {
         const onControl = async (msg) => {
             switch (msg) {
                 case 'next':
-                    await frame.evaluate(() => { document.querySelector('#buttonNextSlide').click() }).catch(async ()=>{
-                        event.removeListener('control',onControl);
+                    await frame.evaluate(() => { document.querySelector('#buttonNextSlide').click() }).catch(async () => {
+                        event.removeListener('control', onControl);
                         await browser.close();
                     });
                     break;
@@ -118,7 +128,15 @@ http.listen(3000, function () {
                     await frame.evaluate(() => { document.querySelector('#buttonPrevSlide').click() });
                     break;
             }
+            await frame.waitFor(100);
+            io.emit('note', await Slide.evaluate(() => {
+                var result = '';
+                document.querySelectorAll('#OutlineView ul > *').forEach((elements) => {
+                    result += elements.innerText + '\n';
+                });
+                return result;
+            }));
         };
-        event.addListener('control',onControl);
+        event.addListener('control', onControl);
     }
 })();
