@@ -11,8 +11,7 @@
   "dependencies": {
     "@types/puppeteer": "^1.12.4",
     "express": "^4.17.1",
-    "puppeteer": "^1.18.0",
-    "python-shell": "^1.0.7",
+    "puppeteer-core": "^1.18.1",
     "socket.io": "^2.2.0"
   }
 }
