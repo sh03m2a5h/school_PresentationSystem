@@ -2,24 +2,66 @@ const puppeteer = require('puppeteer-core');
 const datas = require('./data.js');
 const execSync = require('child_process').execSync;
 const EventEmitter = require('events').EventEmitter;
-
-var app = require('express')();
-var http = require('http').createServer(app);
-var io = require('socket.io')(http);
+const qrcode = require('qrcode');
+const uuid = require('uuid');
+const os = require('os');
+const app = require('express')();
+const http = require('http').createServer(app);
+const io = require('socket.io')(http);
 
 const event = new EventEmitter;
 event.setMaxListeners(10);
 
-app.get('/', function (req, res) {
-    res.sendFile(__dirname + '/index.html');
+class otp {
+    static key = uuid.v1();
+    /**
+     * @type {SocketIO.Socket}
+     */
+    static _authorized_client = io;
+    static newKey() {
+        this._authorized_client.disconnect();
+        qrcode.toFile('./qr.png', 'http://' + addresses[0] + ':3000/' + one_time_key);
+        this.key = uuid.v1;
+    }
+    /**
+     * 
+     * @param {SocketIO.Socket} client 
+     */
+    static setOuthorizedClient(client) {
+        this._authorized_client = client;
+    }
+    static getOuthorizedClient() {
+        return this._authorized_client;
+    }
+}
+
+const interfacess = os.networkInterfaces();
+const addresses = [];
+for (const interfaces of interfacess)
+    for (const interface of interfaces)
+        if (interface.family === 'IPv4' && !interface.internal)
+            addresses.push(interface.address);
+
+app.get('/:uuid', function (req, res) {
+    if (req.params.uuid == otp.key) {
+        res.sendFile(__dirname + '/index.html');
+    } else {
+        res.sendStatus(404)
+    }
 });
 
 io.on('connection', function (socket) {
     console.log('a user connected');
-    socket.on('message', (msg) => {
-        console.log(msg);
-        event.emit('control', msg);
-    });
+    socket.on('authorize', (uuid) => {
+        if (uuid == otp.key) {
+            otp.setOuthorizedClient(socket);
+            socket.on('message', (msg) => {
+                console.log(msg);
+                event.emit('control', msg);
+            });
+            event.emit('connect');
+        }
+    })
 });
 
 http.listen(3000, function () {
@@ -101,6 +143,11 @@ http.listen(3000, function () {
     myresize(browser._connection, windowId, datas.display.width, datas.display.height)
 
     for (const ppURL of ppURLs) {
+        await new Promise((resolve,reject)=>{
+            event.once('connect',()=>{
+                resolve();
+            });
+        });
         const appFrame = await (
             /**
              * PowerPointスライドショー表示処理
@@ -119,7 +166,7 @@ http.listen(3000, function () {
                 return appFrame;
             })();
 
-        await new Promise(async (resolve,reject) => {   /* スライド */
+        await new Promise(async (resolve, reject) => {   /* スライド */
             await appFrame.evaluate(() => {
                 document.querySelector('iframe#SlideShowHostFrame').setAttribute('name', 'SlideShowHostFrame');
             });
@@ -149,13 +196,13 @@ http.listen(3000, function () {
                         break;
                 }
                 await appFrame.waitFor(100);
-                io.emit('note', await slideFrame.evaluate(() => {
+                otp.getOuthorizedClient().emit('note', await slideFrame.evaluate(() => {
                     var result = '';
                     document.querySelectorAll('#OutlineView ul > *').forEach((elements) => {
                         result += elements.innerText + '\n';
                     });
                     return result;
-                }).catch(()=>{}));
+                }).catch(() => { }));
             };
             event.addListener('control', onControl);
         });

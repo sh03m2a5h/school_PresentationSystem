@@ -69,6 +69,10 @@
     socket.on('note', (data) => {
       document.querySelector('#notes').value = data;
     })
+
+    socket.on('connect',(data) => {
+      socket.emit('authorize', document.URL.substring(document.URL.lastIndexOf('/')+1))
+    })
   </script>
 </body>
 
