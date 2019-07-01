@@ -155,7 +155,7 @@ http.listen(3000, function () {
                         result += elements.innerText + '\n';
                     });
                     return result;
-                }));
+                }).catch(()=>{}));
             };
             event.addListener('control', onControl);
         });
