@@ -77,76 +77,88 @@ http.listen(3000, function () {
     const ppURLs = await (
         /**
          * OneDrive探索処理
-         * @returns {Array<HTMLAnchorElement>}
+         * @returns {Array<{name:string,url:string}>}
          */
         async (text) => {
             await page.goto('https://onedrive.live.com');
             await page.waitForSelector('div[data-automationid="ドキュメント"]');
             await page.click('div[data-automationid="ドキュメント"]');
-            await page.waitForSelector(`div[data-automationid*="${text}"]`);
-            return await page.evaluate((text) => {
-                return document.querySelectorAll('.ms-List-surface a.ms-Tile-link')
-            }, text);
+            await page.waitForSelector(`div.ms-Tile`);
+            return await page.evaluate(() => {
+                const files = [];
+                for (const elem of document.querySelectorAll('div.ms-Tile')) {
+                    files.push({ name: elem.getAttribute('data-automationid'), url: elem.querySelector('a').href });
+                }
+                return files;
+            });
         })();
+
+    console.log(ppURLs);
+    // await new Promise((resolve,reject)=>{
+    //     
+    // });
 
     myresize(browser._connection, windowId, datas.display.width, datas.display.height)
 
-    const appFrame = await (
-        /**
-         * PowerPointスライドショー表示処理
-         * @returns {puppeteer.Frame}
-         */
-        async () => {
-            await page.goto(ppURL);
-            await page.waitForSelector('iframe[name="wac_frame"]');
-            const appFrame = await page.frames().find(f => f.name() === 'wac_frame');
-            await appFrame.waitFor(5000);
-            await appFrame.waitForSelector(`button[data-automation-id*="View"]`);
-            await appFrame.click(`button[data-automation-id="View"]`);
-            await appFrame.waitFor(2000);
-            await appFrame.waitForSelector(`button[data-automation-id="PlayFromBeginning"]`);
-            await appFrame.click(`button[data-automation-id="PlayFromBeginning"]`);
-            return appFrame;
-        })();
+    for (const ppURL of ppURLs) {
+        const appFrame = await (
+            /**
+             * PowerPointスライドショー表示処理
+             * @returns {puppeteer.Frame}
+             */
+            async () => {
+                await page.goto(ppURL.url);
+                await page.waitForSelector('iframe[name="wac_frame"]');
+                const appFrame = await page.frames().find(f => f.name() === 'wac_frame');
+                await appFrame.waitFor(5000);
+                await appFrame.waitForSelector(`button[data-automation-id*="View"]`);
+                await appFrame.click(`button[data-automation-id="View"]`);
+                await appFrame.waitFor(2000);
+                await appFrame.waitForSelector(`button[data-automation-id="PlayFromBeginning"]`);
+                await appFrame.click(`button[data-automation-id="PlayFromBeginning"]`);
+                return appFrame;
+            })();
 
-    {   /* スライド */
-        await appFrame.evaluate(() => {
-            document.querySelector('iframe#SlideShowHostFrame').setAttribute('name', 'SlideShowHostFrame');
-        });
-        const slideFrame = (await appFrame.childFrames().find(f => f.name() === 'SlideShowHostFrame')).childFrames()[0];
-        await slideFrame.waitForSelector('#browserLayerViewId');
-        const onControl = async (msg) => {
-            switch (msg) {
-                case 'next':
-                    await appFrame.evaluate(() => { document.querySelector('#buttonNextSlide').click() }).catch(async () => {
+        await new Promise(async (resolve,reject) => {   /* スライド */
+            await appFrame.evaluate(() => {
+                document.querySelector('iframe#SlideShowHostFrame').setAttribute('name', 'SlideShowHostFrame');
+            });
+            const slideFrame = (await appFrame.childFrames().find(f => f.name() === 'SlideShowHostFrame')).childFrames()[0];
+            await slideFrame.waitForSelector('#browserLayerViewId');
+            const onControl = async (msg) => {
+                switch (msg) {
+                    case 'next':
+                        await appFrame.evaluate(() => { document.querySelector('#buttonNextSlide').click() }).catch(async () => {
+                            event.removeListener('control', onControl);
+                            resolve();
+                        });
+                        break;
+                    case 'prev':
+                        await appFrame.evaluate(() => { document.querySelector('#buttonPrevSlide').click() }).catch((e) => { console.error(e) });
+                        break;
+                    case 'play':
+                        const slide = (() => { let res = null; for (let [key, value] of appFrame._childFrames.entries()) { res = value }; let resb = null; for (let [key, value] of res._childFrames.entries()) { resb = value }; return resb; })();
+                        // console.log(slide);
+                        await slide.evaluate(() => {
+                            document.querySelector('video').play();
+                        });
+                        break;
+                    case 'back':
                         event.removeListener('control', onControl);
                         await browser.close();
+                        break;
+                }
+                await appFrame.waitFor(100);
+                io.emit('note', await slideFrame.evaluate(() => {
+                    var result = '';
+                    document.querySelectorAll('#OutlineView ul > *').forEach((elements) => {
+                        result += elements.innerText + '\n';
                     });
-                    break;
-                case 'prev':
-                    await appFrame.evaluate(() => { document.querySelector('#buttonPrevSlide').click() }).catch((e) => { console.error(e) });
-                    break;
-                case 'play':
-                    const slide = (() => { let res = null; for (let [key, value] of appFrame._childFrames.entries()) { res = value }; let resb = null; for (let [key, value] of res._childFrames.entries()) { resb = value }; return resb; })();
-                    // console.log(slide);
-                    await slide.evaluate(() => {
-                        document.querySelector('video').play();
-                    });
-                    break;
-                case 'back':
-                    event.removeListener('control', onControl);
-                    await browser.close();
-                    break;
-            }
-            await appFrame.waitFor(100);
-            io.emit('note', await slideFrame.evaluate(() => {
-                var result = '';
-                document.querySelectorAll('#OutlineView ul > *').forEach((elements) => {
-                    result += elements.innerText + '\n';
-                });
-                return result;
-            }));
-        };
-        event.addListener('control', onControl);
+                    return result;
+                }));
+            };
+            event.addListener('control', onControl);
+        });
     }
+    await browser.close();
 })();
