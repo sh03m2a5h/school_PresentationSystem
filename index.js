@@ -50,7 +50,7 @@ for (const itf in interfacess)
 app.get('/:uuid', function (req, res) {
     if (req.params.uuid == 'qr.png') {
         console.log(req.ip);
-        if (req.ip.includes('::1')||req.ip.includes('127.0.0.1'))
+        if (req.ip.includes('::1') || req.ip.includes('127.0.0.1'))
             res.sendFile(__dirname + '/qr.png');
         else
             res.sendStatus(404);
@@ -92,26 +92,14 @@ http.listen(3000, function () {
         }
     )
 
-    const myresize = async (c, wid, w, h) => {
-        await page.setViewport({ width: w, height: h })
-        await c.send('Browser.setWindowBounds', {
-            bounds: {
-                height: h,
-                width: w
-            },
-            windowId: wid
-        })
-    }
-    
     {
         const disps = execSync('python close_imbotbar.py').toString();
+        console.log(disps);
         const json = JSON.parse(disps);
-        datas.display.width = json.width;
-        datas.display.height = json.height;
-        console.log(datas.display);
+        await page.setViewport({ width: json.width, height: json.height });
     }
 
-    await page.setViewport({ width: datas.display.width, height: datas.display.height });
+    
     await page.goto('https://office.com');
 
     {   /* ログイン処理 */
@@ -162,23 +150,28 @@ http.listen(3000, function () {
                 resolve();
             });
         });
-        const appFrame = await (
-            /**
-             * PowerPointスライドショー表示処理
-             * @returns {puppeteer.Frame}
-             */
-            async () => {
+
+        /**
+         * @type {puppeteer.Frame}
+         */
+        const appFrame = await new Promise(async (resolve, reject) => {
                 await page.goto(ppURL.url);
                 await page.waitForSelector('iframe[name="wac_frame"]');
                 const appFrame = await page.frames().find(f => f.name() === 'wac_frame');
-                await appFrame.waitFor(5000);
-                await appFrame.waitForSelector(`button[data-automation-id*="View"]`);
-                await appFrame.click(`button[data-automation-id="View"]`);
-                await appFrame.waitFor(2000);
-                await appFrame.waitForSelector(`button[data-automation-id="PlayFromBeginning"]`);
-                await appFrame.click(`button[data-automation-id="PlayFromBeginning"]`);
-                return appFrame;
-            })();
+                await appFrame.waitForSelector(`button[data-automation-id="View"]`);
+                const loop = (() => {
+                        appFrame.click(`button[data-automation-id="View"]`).then(() => {
+                            return appFrame.waitForSelector(`button[data-automation-id="PlayFromBeginning"]`, { timeout: 2000 });
+                        }).then(() => {
+                            return appFrame.click(`button[data-automation-id="PlayFromBeginning"]`);
+                        }).then(()=>{
+                            resolve(appFrame);
+                        }).catch(() => {
+                            loop();
+                        });
+                    });
+                loop();
+            });
 
         await new Promise(async (resolve, reject) => {   /* スライド */
             await appFrame.evaluate(() => {
@@ -206,7 +199,7 @@ http.listen(3000, function () {
                         break;
                     case 'back':
                         event.removeListener('control', onControl);
-                        await browser.close();
+                        resolve();
                         break;
                 }
                 await appFrame.waitFor(100);
@@ -222,4 +215,6 @@ http.listen(3000, function () {
         });
     }
     await browser.close();
+    io.close();
+    http.close();
 })();
