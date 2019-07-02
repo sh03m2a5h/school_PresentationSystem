@@ -12,38 +12,50 @@ const io = require('socket.io')(http);
 const event = new EventEmitter;
 event.setMaxListeners(10);
 
-class otp {
-    static key = uuid.v1();
-    /**
-     * @type {SocketIO.Socket}
-     */
-    static _authorized_client = io;
-    static newKey() {
-        this._authorized_client.disconnect();
-        qrcode.toFile('./qr.png', 'http://' + addresses[0] + ':3000/' + one_time_key);
-        this.key = uuid.v1;
+class Otp {
+    constructor() {
+        this.key = '';
+        /**
+         * @type {SocketIO.Socket}
+         */
+        this._authorized_client = null;
+    }
+    newKey() {
+        if (this._authorized_client) {
+            this._authorized_client.disconnect();
+        }
+        this.key = uuid.v1();
+        qrcode.toFile('./qr.png', 'http://' + addresses[0] + ':3000/' + this.key);
     }
     /**
      * 
      * @param {SocketIO.Socket} client 
      */
-    static setOuthorizedClient(client) {
+    setOuthorizedClient(client) {
         this._authorized_client = client;
     }
-    static getOuthorizedClient() {
+    getOuthorizedClient() {
         return this._authorized_client;
     }
 }
+const otp = new Otp();
 
-const interfacess = os.networkInterfaces();
+const interfacess = os.networkInterfaces()
 const addresses = [];
-for (const interfaces of interfacess)
-    for (const interface of interfaces)
+for (const itf in interfacess)
+    for (const interface of interfacess[itf])
         if (interface.family === 'IPv4' && !interface.internal)
             addresses.push(interface.address);
 
 app.get('/:uuid', function (req, res) {
-    if (req.params.uuid == otp.key) {
+    if (req.params.uuid == 'qr.png') {
+        console.log(req.ip);
+        if (req.ip.includes('::1')||req.ip.includes('127.0.0.1'))
+            res.sendFile(__dirname + '/qr.png');
+        else
+            res.sendStatus(404);
+
+    } else if (req.params.uuid == otp.key) {
         res.sendFile(__dirname + '/index.html');
     } else {
         res.sendStatus(404)
@@ -90,9 +102,7 @@ http.listen(3000, function () {
             windowId: wid
         })
     }
-    await page.setViewport({ width: 1280, height: 720 });
-    await page.goto('https://office.com');
-
+    
     {
         const disps = execSync('python close_imbotbar.py').toString();
         const json = JSON.parse(disps);
@@ -101,6 +111,8 @@ http.listen(3000, function () {
         console.log(datas.display);
     }
 
+    await page.setViewport({ width: datas.display.width, height: datas.display.height });
+    await page.goto('https://office.com');
 
     {   /* ログイン処理 */
         await page.waitForSelector('#hero-banner-sign-in-to-office-365-link');
@@ -140,11 +152,13 @@ http.listen(3000, function () {
     //     
     // });
 
-    myresize(browser._connection, windowId, datas.display.width, datas.display.height)
+    //myresize(browser._connection, windowId, datas.display.width, datas.display.height)
 
     for (const ppURL of ppURLs) {
-        await new Promise((resolve,reject)=>{
-            event.once('connect',()=>{
+        otp.newKey();
+        await new Promise((resolve, reject) => {
+            page.goto("http://localhost:3000/qr.png");
+            event.once('connect', () => {
                 resolve();
             });
         });
