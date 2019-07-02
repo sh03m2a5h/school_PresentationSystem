@@ -2,6 +2,7 @@
 ## 必要ソフトウェア 
 - node.js (npm)
 - python (pip)
+- Google Chrome
 
 ## 依存関係のインストール
 ```
